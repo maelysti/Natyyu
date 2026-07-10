@@ -203,6 +203,13 @@ export default function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isPdfPrintSelectorOpen, setIsPdfPrintSelectorOpen] = useState(false);
   const [isSqlImportOpen, setIsSqlImportOpen] = useState(false);
+  const [cartonLimitError, setCartonLimitError] = useState<{
+    isOpen: boolean;
+    message: string;
+    limit: number;
+    currentTotal: number;
+    sizesInvolved: string[];
+  } | null>(null);
 
   // Accordion Expansions to collapse sections for clean layout
   const [isOrderMetaExpanded, setIsOrderMetaExpanded] = useState<boolean>(true);
@@ -2032,6 +2039,55 @@ export default function App() {
           onSave={saveBoxDetailsModal}
           darkMode={darkMode}
         />
+      )}
+
+      {cartonLimitError?.isOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9600] backdrop-blur-xs px-4">
+          <div className={`border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 transition-all animate-in fade-in zoom-in-95 duration-150 ${
+            darkMode ? 'bg-[#18161e] border-red-500/40 text-slate-100' : 'bg-white border-red-200 text-slate-900 shadow-xl'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-500/10 rounded-full text-red-500 mt-0.5">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <h3 className="text-sm font-sans font-black uppercase tracking-wider text-red-500 flex items-center gap-1.5">
+                  ⚠️ Limite de pièces dépassée
+                </h3>
+                <p className={`text-xs leading-relaxed ${darkMode ? 'text-slate-350' : 'text-slate-600'}`}>
+                  {cartonLimitError.message}
+                </p>
+              </div>
+            </div>
+
+            {cartonLimitError.sizesInvolved && (
+              <div className={`p-3 rounded-xl border text-[11px] font-mono space-y-1 ${
+                darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+              }`}>
+                <div className={`font-bold flex justify-between ${darkMode ? 'text-slate-350' : 'text-slate-700'}`}>
+                  <span>Détail logistique :</span>
+                  <span>Max : {cartonLimitError.limit} pcs</span>
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Tailles concernées : <b>{cartonLimitError.sizesInvolved.join(', ')}</b>
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Total essayé : <b className="text-red-500 font-bold">{cartonLimitError.currentTotal} pcs</b>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setCartonLimitError(null)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs font-mono transition-all cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99]"
+              >
+                Compris, ajuster la quantité
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {isMajBsdOpen && (
@@ -4368,35 +4424,51 @@ export default function App() {
 
                             {/* 2. Custom remainder cartons list */}
                             <div className="space-y-4">
-                              <div className="flex items-center justify-between">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <h5 className={`text-xs font-mono font-bold uppercase ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                                   📦 Vos cartons de reste personnalisés ({activeColorConfig.customRemainders?.length || 0})
                                 </h5>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newCarton: CustomRemainderCarton = {
-                                      id: 'rc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
-                                      sizes: {}
-                                    };
-                                    activeColorConfig.tailles.forEach(sz => {
-                                      newCarton.sizes[sz] = 0;
-                                    });
-                                    
-                                    const nextColors = [...colors];
-                                    nextColors[activeColorIdx] = {
-                                      ...activeColorConfig,
-                                      customRemainders: [...(activeColorConfig.customRemainders || []), newCarton]
-                                    };
-                                    setColors(nextColors);
-                                    setHasGenerated(false);
-                                  }}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all inline-flex items-center gap-1 cursor-pointer ${
-                                    darkMode ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                                  }`}
-                                >
-                                  <span>➕</span> Ajouter un carton de reste
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newCarton: CustomRemainderCarton = {
+                                        id: 'rc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
+                                        sizes: {}
+                                      };
+                                      activeColorConfig.tailles.forEach(sz => {
+                                        newCarton.sizes[sz] = 0;
+                                      });
+                                      
+                                      const nextColors = [...colors];
+                                      nextColors[activeColorIdx] = {
+                                        ...activeColorConfig,
+                                        customRemainders: [...(activeColorConfig.customRemainders || []), newCarton]
+                                      };
+                                      setColors(nextColors);
+                                      setHasGenerated(false);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all inline-flex items-center gap-1 cursor-pointer ${
+                                      darkMode ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                                    }`}
+                                  >
+                                    <span>➕</span> Ajouter un carton
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Instantly run the packing generator to apply manual remainders
+                                      handleGenerateList();
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all inline-flex items-center gap-1 cursor-pointer ${
+                                      darkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                    }`}
+                                    title="Valider et générer la liste de colisage"
+                                  >
+                                    <span>✔️</span> Valider les restes
+                                  </button>
+                                </div>
                               </div>
 
                               {(!activeColorConfig.customRemainders || activeColorConfig.customRemainders.length === 0) ? (
@@ -4474,6 +4546,37 @@ export default function App() {
                                                     value={cc.sizes[sz] || 0}
                                                     onChange={(e) => {
                                                       const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                      
+                                                      // Calculate prospective sizes
+                                                      const prospectiveSizes = {
+                                                        ...cc.sizes,
+                                                        [sz]: val
+                                                      };
+                                                      
+                                                      // Find sizes with quantity > 0
+                                                      const activeSizes = Object.keys(prospectiveSizes).filter(s => (Number(prospectiveSizes[s]) || 0) > 0);
+                                                      
+                                                      if (activeSizes.length > 0) {
+                                                        // Get the capacity limit for each active size in the carton
+                                                        const caps = activeSizes.map(s => activeColorConfig.sizes[s]?.cap || 25);
+                                                        const limit = Math.min(...caps);
+                                                        
+                                                        // Get the prospective total pieces in this carton
+                                                        const prospectiveTotal = Object.values(prospectiveSizes).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0) as number;
+                                                        
+                                                        if (prospectiveTotal > limit) {
+                                                          // Show error dialog and block!
+                                                          setCartonLimitError({
+                                                            isOpen: true,
+                                                            message: `Le nombre total de pièces dans ce carton mixte (${prospectiveTotal} pcs) dépasse le nombre maximum de pièces par carton autorisé pour les tailles incluses (${limit} pcs).`,
+                                                            limit: limit,
+                                                            currentTotal: prospectiveTotal,
+                                                            sizesInvolved: activeSizes
+                                                          });
+                                                          return; // BLOCK state update
+                                                        }
+                                                      }
+
                                                       const nextColors = [...colors];
                                                       const updatedRemainders = (activeColorConfig.customRemainders || []).map(item => {
                                                         if (item.id === cc.id) {
