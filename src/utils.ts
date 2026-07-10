@@ -2124,7 +2124,8 @@ export function numberToFrenchWords(n: number): string {
  */
 export function validateColorCustomRemainders(
   colorConfig: ColorConfig,
-  globalMode: 'strict_solide' | 'mixte_autorise'
+  globalMode: 'strict_solide' | 'mixte_autorise',
+  maxSizesPerBox: number
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   const activeMode = colorConfig.mode === 'inherit' ? globalMode : colorConfig.mode;
@@ -2133,6 +2134,17 @@ export function validateColorCustomRemainders(
     return { valid: true, errors };
   }
 
+  // 1. Check max different sizes limit per mixed carton
+  colorConfig.customRemainders?.forEach((cc, idx) => {
+    const activeSizes = Object.keys(cc.sizes).filter(s => (Number(cc.sizes[s]) || 0) > 0);
+    if (activeSizes.length > maxSizesPerBox) {
+      errors.push(
+        `Carton de reste n°${idx + 1} : Il contient ${activeSizes.length} tailles différentes (${activeSizes.join(', ')}), ce qui dépasse la limite autorisée par carton mixte (${maxSizesPerBox} tailles max selon vos paramètres logistiques).`
+      );
+    }
+  });
+
+  // 2. Check allocated vs required remainders
   const { tailles, sizes } = colorConfig;
   tailles.forEach(sz => {
     const qTot = sizes[sz]?.qtyTot || 0;

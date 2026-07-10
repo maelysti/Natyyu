@@ -509,6 +509,9 @@ export default function App() {
   const handleSelectPackingMode = (mode: 'strict_solide' | 'mixte_autorise') => {
     setGlobalPackingMode(mode);
     setHasGenerated(false);
+    if (hasGenerated) {
+      autoRecalculateResults(mode, forceSingleCarton, maxSizesPerBox, forceSubCapSolidInMixed, colors);
+    }
   };
 
   // Config tab functions
@@ -738,6 +741,9 @@ export default function App() {
     const nextColors = colors.map((c, i) => (i === activeColorIdx ? { ...c, mode } : c));
     setColors(nextColors);
     setHasGenerated(false);
+    if (hasGenerated) {
+      autoRecalculateResults(globalPackingMode, forceSingleCarton, maxSizesPerBox, forceSubCapSolidInMixed, nextColors);
+    }
   };
 
   const handleAddSizeColumn = () => {
@@ -1523,12 +1529,50 @@ export default function App() {
     triggerToast(`🛠️ Gabarit de colisage mis à jour pour ${sizeName} !`, 'success');
   };
 
+  // Quiet auto-recalculate helper to keep packing list updated on settings changes
+  const autoRecalculateResults = (
+    nextGlobalMode?: 'strict_solide' | 'mixte_autorise',
+    nextForceSingleCarton?: boolean,
+    nextMaxSizesPerBox?: number,
+    nextForceSubCap?: boolean,
+    nextColors?: ColorConfig[]
+  ) => {
+    if (!hasGenerated) return;
+
+    const gMode = nextGlobalMode !== undefined ? nextGlobalMode : globalPackingMode;
+    const fSingle = nextForceSingleCarton !== undefined ? nextForceSingleCarton : forceSingleCarton;
+    const mSizes = nextMaxSizesPerBox !== undefined ? nextMaxSizesPerBox : maxSizesPerBox;
+    const fSubCap = nextForceSubCap !== undefined ? nextForceSubCap : forceSubCapSolidInMixed;
+    const currentColors = nextColors !== undefined ? nextColors : colors;
+
+    // Run validation first
+    for (let i = 0; i < currentColors.length; i++) {
+      const color = currentColors[i];
+      const validation = validateColorCustomRemainders(color, gMode, mSizes);
+      if (!validation.valid) {
+        setRemainderValidationError({
+          isOpen: true,
+          colorName: color.nom,
+          errors: validation.errors
+        });
+        return; // BLOCK and show error dialog
+      }
+    }
+
+    const outputResults = currentColors.map((c, idx) => {
+      return computeColorResult(c, gMode, fSingle, mSizes, idx, fSubCap);
+    });
+
+    setResults(outputResults);
+    setHasGenerated(true);
+  };
+
   // Generate Results Trigger
   const handleGenerateList = () => {
     // Intervene if any custom remainders are configured incorrectly
     for (let i = 0; i < colors.length; i++) {
       const color = colors[i];
-      const validation = validateColorCustomRemainders(color, globalPackingMode);
+      const validation = validateColorCustomRemainders(color, globalPackingMode, maxSizesPerBox);
       if (!validation.valid) {
         setRemainderValidationError({
           isOpen: true,
@@ -3382,8 +3426,12 @@ export default function App() {
                   <span className={`text-xs font-mono font-semibold uppercase ${darkMode ? 'text-white/90' : 'text-slate-600'}`}>Forcer 1 carton unique</span>
                   <button
                     onClick={() => {
-                      setForceSingleCarton(!forceSingleCarton);
+                      const val = !forceSingleCarton;
+                      setForceSingleCarton(val);
                       setHasGenerated(false);
+                      if (hasGenerated) {
+                        autoRecalculateResults(globalPackingMode, val, maxSizesPerBox, forceSubCapSolidInMixed, colors);
+                      }
                     }}
                     className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider transition-all cursor-pointer ${
                       forceSingleCarton
@@ -3423,6 +3471,9 @@ export default function App() {
                             onClick={() => {
                               setMaxSizesPerBox(num);
                               setHasGenerated(false);
+                              if (hasGenerated) {
+                                autoRecalculateResults(globalPackingMode, forceSingleCarton, num, forceSubCapSolidInMixed, colors);
+                              }
                             }}
                             className={`px-3.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
                               maxSizesPerBox === num
@@ -3456,8 +3507,12 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => {
-                        setForceSubCapSolidInMixed(!forceSubCapSolidInMixed);
+                        const val = !forceSubCapSolidInMixed;
+                        setForceSubCapSolidInMixed(val);
                         setHasGenerated(false);
+                        if (hasGenerated) {
+                          autoRecalculateResults(globalPackingMode, forceSingleCarton, maxSizesPerBox, val, colors);
+                        }
                       }}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all cursor-pointer shrink-0 ${
                         forceSubCapSolidInMixed
@@ -4433,6 +4488,9 @@ export default function App() {
                                 };
                                 setColors(nextColors);
                                 setHasGenerated(false);
+                                if (hasGenerated) {
+                                  autoRecalculateResults(globalPackingMode, forceSingleCarton, maxSizesPerBox, forceSubCapSolidInMixed, nextColors);
+                                }
                               }}
                               className="sr-only peer"
                             />
