@@ -2152,8 +2152,27 @@ export function validateColorCustomRemainders(
     const r = qTot % cap;
 
     let allocated = 0;
-    colorConfig.customRemainders?.forEach(cc => {
-      allocated += Number(cc.sizes[sz]) || 0;
+    colorConfig.customRemainders?.forEach((cc, idx) => {
+      const val = Number(cc.sizes[sz]) || 0;
+      allocated += val;
+
+      if (val > 0) {
+        // A. Check that remainder is not divided/separated
+        if (val !== r) {
+          errors.push(
+            `Taille ${sz} dans Carton de reste n°${idx + 1} : Les restes ne peuvent pas être divisés. Vous devez allouer la totalité des ${r} pièces de reste ensemble (vous avez saisi ${val} pcs).`
+          );
+        }
+
+        // B. Check that spelling matches the French letters
+        const expectedSpelling = numberToFrenchWords(r).toLowerCase().trim();
+        const userSpelling = (cc.writtenWords?.[sz] || '').toLowerCase().trim();
+        if (userSpelling !== expectedSpelling) {
+          errors.push(
+            `Taille ${sz} dans Carton de reste n°${idx + 1} : Pour confirmer l'emballage de ces ${r} pièces de reste, vous devez écrire la quantité en toutes lettres : "${expectedSpelling}" dans le champ de vérification.`
+          );
+        }
+      }
     });
 
     if (allocated !== r) {

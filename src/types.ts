@@ -33,6 +33,7 @@ export interface SizeDetails {
 export interface CustomRemainderCarton {
   id: string;
   sizes: { [sizeName: string]: number };
+  writtenWords?: { [sizeName: string]: string };
 }
 
 export interface ColorConfig {

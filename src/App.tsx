@@ -509,8 +509,19 @@ export default function App() {
   const handleSelectPackingMode = (mode: 'strict_solide' | 'mixte_autorise') => {
     setGlobalPackingMode(mode);
     setHasGenerated(false);
+    
+    let nextColors = colors;
+    if (mode === 'strict_solide') {
+      nextColors = colors.map(c => ({
+        ...c,
+        mode: 'inherit',
+        customRemaindersEnabled: false
+      }));
+      setColors(nextColors);
+    }
+    
     if (hasGenerated) {
-      autoRecalculateResults(mode, forceSingleCarton, maxSizesPerBox, forceSubCapSolidInMixed, colors);
+      autoRecalculateResults(mode, forceSingleCarton, maxSizesPerBox, forceSubCapSolidInMixed, nextColors);
     }
   };
 
@@ -738,7 +749,16 @@ export default function App() {
   };
 
   const handleUpdateTabMode = (mode: 'inherit' | 'strict_solide' | 'mixte_autorise') => {
-    const nextColors = colors.map((c, i) => (i === activeColorIdx ? { ...c, mode } : c));
+    const nextColors = colors.map((c, i) => {
+      if (i === activeColorIdx) {
+        return {
+          ...c,
+          mode,
+          customRemaindersEnabled: mode === 'strict_solide' ? false : c.customRemaindersEnabled
+        };
+      }
+      return c;
+    });
     setColors(nextColors);
     setHasGenerated(false);
     if (hasGenerated) {
@@ -4062,15 +4082,15 @@ export default function App() {
                   <table className="w-full text-xs text-center border-collapse">
                     <thead>
                       <tr className={`${
-                        darkMode ? 'bg-white/5 text-slate-400 border-white/10' : 'bg-slate-800 text-white border-slate-700'
+                        darkMode ? 'bg-white/5 text-slate-400 border-white/10' : 'bg-slate-100 text-slate-800 border-slate-200'
                       } font-mono font-bold border-b`}>
                         <th className={`py-3 px-4 text-left border-r font-sans tracking-wide ${
-                          darkMode ? 'border-white/10 text-slate-400' : 'border-slate-700 text-white'
+                          darkMode ? 'border-white/10 text-slate-400' : 'border-slate-200 text-slate-800'
                         }`}>
                           PARAMÈTRE DE COLISAGE
                         </th>
                         {colors[activeColorIdx].tailles.map((sz, idx) => (
-                          <th key={idx} className={`border-r col-sizes-cells p-1.5 ${darkMode ? 'border-white/10' : 'border-slate-700 bg-slate-900/10'}`}>
+                          <th key={idx} className={`border-r col-sizes-cells p-1.5 ${darkMode ? 'border-white/10' : 'border-slate-200 bg-slate-200/50 text-slate-800'}`}>
                             <input
                               type="text"
                               value={sz}
@@ -4319,22 +4339,22 @@ export default function App() {
                         <table className="w-full text-xs text-center border-collapse">
                           <thead>
                             <tr className={`${
-                              darkMode ? 'bg-white/5 border-white/10 text-slate-200' : 'bg-slate-800 border-slate-700 text-white'
+                              darkMode ? 'bg-white/5 border-white/10 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'
                             } font-mono font-bold border-b`}>
                               <th className={`py-3 px-4 text-left border-r font-sans tracking-wide uppercase text-[10px] font-black ${
-                                darkMode ? 'border-white/10 text-slate-300' : 'border-slate-700 text-white'
+                                darkMode ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-800'
                               }`} style={{ width: '220px' }}>
                                 INDICATION PAR COLISAGE
                               </th>
                               {activeColorConfig.tailles.map((sz) => (
                                 <th key={sz} className={`p-2 border-r col-sizes-cells font-mono font-black text-xs ${
-                                  darkMode ? 'border-white/10 bg-white/5 text-white' : 'border-slate-200 bg-slate-100 text-slate-800 font-bold'
+                                  darkMode ? 'border-white/10 bg-white/5 text-white' : 'border-slate-200 bg-slate-200/50 text-slate-800 font-bold'
                                 }`}>
                                   {sz}
                                 </th>
                               ))}
                               <th className={`p-2 font-mono font-black text-xs ${
-                                  darkMode ? 'border-white/10 bg-white/10 text-white' : 'border-slate-200 bg-slate-100 text-slate-800 font-bold'
+                                  darkMode ? 'border-white/10 bg-white/10 text-white' : 'border-slate-200 bg-slate-200/50 text-slate-800 font-bold'
                               }`}>
                                 TOTALE
                               </th>
@@ -4682,85 +4702,160 @@ export default function App() {
                                             {activeColorConfig.tailles.map(sz => {
                                               const qTot = activeColorConfig.sizes[sz]?.qtyTot || 0;
                                               const cap = activeColorConfig.sizes[sz]?.cap || 25;
-                                              const r = qTot - (Math.floor(qTot / cap) * cap);
-                                              
-                                              return (
-                                                <div key={sz} className="flex items-center justify-between gap-1.5 font-mono text-xs">
-                                                  <span className={`w-10 text-left ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{sz} :</span>
-                                                  <input
-                                                    type="number"
-                                                    min="0"
-                                                    max={r}
-                                                    value={cc.sizes[sz] || 0}
-                                                    onChange={(e) => {
-                                                      const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                                      
-                                                      // Calculate prospective sizes
-                                                      const prospectiveSizes = {
-                                                        ...cc.sizes,
-                                                        [sz]: val
-                                                      };
-                                                      
-                                                      // Find sizes with quantity > 0
-                                                      const activeSizes = Object.keys(prospectiveSizes).filter(s => (Number(prospectiveSizes[s]) || 0) > 0);
-                                                      
-                                                      if (activeSizes.length > maxSizesPerBox) {
-                                                        // Show error dialog and block!
-                                                        setCartonLimitError({
-                                                          isOpen: true,
-                                                          message: `Le nombre de tailles mélangées dans ce carton (${activeSizes.length}) dépasse la limite de tailles différentes autorisées par carton mixte (${maxSizesPerBox} tailles max selon vos paramètres logistiques).`,
-                                                          limit: maxSizesPerBox,
-                                                          currentTotal: activeSizes.length,
-                                                          sizesInvolved: activeSizes
-                                                        });
-                                                        return; // BLOCK state update
-                                                      }
+                                              const r = qTot % cap;
 
-                                                      if (activeSizes.length > 0) {
-                                                        // Get the capacity limit for each active size in the carton
-                                                        const caps = activeSizes.map(s => activeColorConfig.sizes[s]?.cap || 25);
-                                                        const limit = Math.min(...caps);
+                                              if (r === 0) {
+                                                return (
+                                                  <div key={sz} className={`p-2 rounded-lg border opacity-40 flex items-center justify-between ${
+                                                    darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                                                  }`}>
+                                                    <span className="font-bold text-xs">{sz}</span>
+                                                    <span className="text-[10px] font-mono text-slate-400">Aucun reste</span>
+                                                  </div>
+                                                );
+                                              }
+
+                                              const isIncluded = (cc.sizes[sz] || 0) > 0;
+                                              const userSpelling = (cc.writtenWords?.[sz] || '').trim();
+                                              const correctSpelling = numberToFrenchWords(r);
+                                              const isSpellingCorrect = userSpelling.toLowerCase() === correctSpelling.toLowerCase();
+
+                                              return (
+                                                <div key={sz} className={`p-2 rounded-lg border flex flex-col justify-between transition-all ${
+                                                  isIncluded 
+                                                    ? (isSpellingCorrect 
+                                                        ? 'border-emerald-500/40 bg-emerald-500/5' 
+                                                        : 'border-red-500/30 bg-red-50/10')
+                                                    : (darkMode ? 'border-white/10 bg-[#161619]' : 'border-slate-250 bg-slate-50/50')
+                                                }`}>
+                                                  <div className="flex items-center justify-between gap-1">
+                                                    <span className={`font-black font-sans text-xs ${isIncluded ? (darkMode ? 'text-white' : 'text-slate-800') : 'text-slate-400'}`}>
+                                                      {sz} <span className="font-normal font-mono text-[10px]">({r} pcs)</span>
+                                                    </span>
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={isIncluded}
+                                                      onChange={(e) => {
+                                                        const included = e.target.checked;
+                                                        const val = included ? r : 0;
                                                         
-                                                        // Get the prospective total pieces in this carton
-                                                        const prospectiveTotal = Object.values(prospectiveSizes).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0) as number;
+                                                        // Calculate prospective sizes
+                                                        const prospectiveSizes = {
+                                                          ...cc.sizes,
+                                                          [sz]: val
+                                                        };
                                                         
-                                                        if (prospectiveTotal > limit) {
+                                                        // Find sizes with quantity > 0
+                                                        const activeSizes = Object.keys(prospectiveSizes).filter(s => (Number(prospectiveSizes[s]) || 0) > 0);
+                                                        
+                                                        if (activeSizes.length > maxSizesPerBox) {
                                                           // Show error dialog and block!
                                                           setCartonLimitError({
                                                             isOpen: true,
-                                                            message: `Le nombre total de pièces dans ce carton mixte (${prospectiveTotal} pcs) dépasse le nombre maximum de pièces par carton autorisé pour les tailles incluses (${limit} pcs).`,
-                                                            limit: limit,
-                                                            currentTotal: prospectiveTotal,
+                                                            message: `Le nombre de tailles mélangées dans ce carton (${activeSizes.length}) dépasse la limite de tailles différentes autorisées par carton mixte (${maxSizesPerBox} tailles max selon vos paramètres logistiques).`,
+                                                            limit: maxSizesPerBox,
+                                                            currentTotal: activeSizes.length,
                                                             sizesInvolved: activeSizes
                                                           });
                                                           return; // BLOCK state update
                                                         }
-                                                      }
 
-                                                      const nextColors = [...colors];
-                                                      const updatedRemainders = (activeColorConfig.customRemainders || []).map(item => {
-                                                        if (item.id === cc.id) {
-                                                          return {
-                                                            ...item,
-                                                            sizes: {
-                                                              ...item.sizes,
-                                                              [sz]: val
-                                                            }
-                                                          };
+                                                        if (activeSizes.length > 0) {
+                                                          // Get the capacity limit for each active size in the carton
+                                                          const caps = activeSizes.map(s => activeColorConfig.sizes[s]?.cap || 25);
+                                                          const limit = Math.min(...caps);
+                                                          
+                                                          // Get the prospective total pieces in this carton
+                                                          const prospectiveTotal = Object.values(prospectiveSizes).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0) as number;
+                                                          
+                                                          if (prospectiveTotal > limit) {
+                                                            // Show error dialog and block!
+                                                            setCartonLimitError({
+                                                              isOpen: true,
+                                                              message: `Le nombre total de pièces dans ce carton mixte (${prospectiveTotal} pcs) dépasse le nombre maximum de pièces par carton autorisé pour les tailles incluses (${limit} pcs).`,
+                                                              limit: limit,
+                                                              currentTotal: prospectiveTotal,
+                                                              sizesInvolved: activeSizes
+                                                            });
+                                                            return; // BLOCK state update
+                                                          }
                                                         }
-                                                        return item;
-                                                      });
-                                                      nextColors[activeColorIdx] = {
-                                                        ...activeColorConfig,
-                                                        customRemainders: updatedRemainders
-                                                      };
-                                                      setColors(nextColors);
-                                                      setHasGenerated(false);
-                                                    }}
-                                                    className={`w-16 px-1.5 py-0.5 rounded text-center text-xs focus:outline-none focus:ring-1 ${
-                                                      darkMode ? 'bg-white/5 border border-white/10 text-white' : 'bg-slate-50 border border-slate-200 text-slate-800'
-                                                    }`}
-                                                  />
+
+                                                        const nextColors = [...colors];
+                                                        const updatedRemainders = (activeColorConfig.customRemainders || []).map(item => {
+                                                          if (item.id === cc.id) {
+                                                            const nextWritten = { ...(item.writtenWords || {}) };
+                                                            if (!included) {
+                                                              delete nextWritten[sz];
+                                                            } else {
+                                                              nextWritten[sz] = '';
+                                                            }
+                                                            return {
+                                                              ...item,
+                                                              sizes: {
+                                                                ...item.sizes,
+                                                                [sz]: val
+                                                              },
+                                                              writtenWords: nextWritten
+                                                            };
+                                                          }
+                                                          return item;
+                                                        });
+                                                        nextColors[activeColorIdx] = {
+                                                          ...activeColorConfig,
+                                                          customRemainders: updatedRemainders
+                                                        };
+                                                        setColors(nextColors);
+                                                        setHasGenerated(false);
+                                                      }}
+                                                      className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                                                    />
+                                                  </div>
+
+                                                  {isIncluded && (
+                                                    <div className="mt-2 pt-1 border-t border-slate-500/10 space-y-1">
+                                                      <div className="flex justify-between items-center text-[9px] font-mono font-bold">
+                                                        <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>CONFIRMER :</span>
+                                                        {isSpellingCorrect ? (
+                                                          <span className="text-emerald-500">✔️ OK</span>
+                                                        ) : (
+                                                          <span className="text-red-500 font-mono">"{correctSpelling}"</span>
+                                                        )}
+                                                      </div>
+                                                      <input
+                                                        type="text"
+                                                        placeholder={`écrire "${correctSpelling}"`}
+                                                        value={cc.writtenWords?.[sz] || ''}
+                                                        onChange={(e) => {
+                                                          const textVal = e.target.value;
+                                                          const nextColors = [...colors];
+                                                          const updatedRemainders = (activeColorConfig.customRemainders || []).map(item => {
+                                                            if (item.id === cc.id) {
+                                                              return {
+                                                                ...item,
+                                                                writtenWords: {
+                                                                  ...(item.writtenWords || {}),
+                                                                  [sz]: textVal
+                                                                }
+                                                              };
+                                                            }
+                                                            return item;
+                                                          });
+                                                          nextColors[activeColorIdx] = {
+                                                            ...activeColorConfig,
+                                                            customRemainders: updatedRemainders
+                                                          };
+                                                          setColors(nextColors);
+                                                          setHasGenerated(false);
+                                                        }}
+                                                        className={`w-full px-1.5 py-0.5 rounded text-[10px] text-center focus:outline-none focus:ring-1 ${
+                                                          isSpellingCorrect 
+                                                            ? (darkMode ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border border-emerald-250 text-emerald-800') 
+                                                            : (darkMode ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-red-50 border border-red-200 text-red-800')
+                                                        }`}
+                                                      />
+                                                    </div>
+                                                  )}
                                                 </div>
                                               );
                                             })}
@@ -4975,27 +5070,27 @@ export default function App() {
                             <div className={`overflow-x-auto rounded-lg border ${darkMode ? 'border-white/10 bg-[#0F0F12]' : 'border-slate-200 bg-slate-50/50'}`}>
                               <table className="w-full text-xs text-center border-collapse">
                                 <thead>
-                                  <tr className={`font-mono font-bold text-[10px] border-b ${darkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-800 border-slate-700 text-white'}`}>
+                                  <tr className={`font-mono font-bold text-[10px] border-b ${darkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
                                     {printColumns.ctn && (
                                       <>
-                                        <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>N° DÉBUT</th>
-                                        <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>N° FIN</th>
+                                        <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>N° DÉBUT</th>
+                                        <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>N° FIN</th>
                                       </>
                                     )}
-                                    {printColumns.color && <th className={`px-2 border-r col-color-lbl ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>COULEUR</th>}
+                                    {printColumns.color && <th className={`px-2 border-r col-color-lbl ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>COULEUR</th>}
                                     {(() => {
                                       const origColor = colors.find(c => c.nom === res.nom);
                                       const showSkuCol = printColumns.sku && !!(origColor && Object.values(origColor.sizes || {}).some((s: any) => s.sku && String(s.sku).trim() !== ''));
-                                      return showSkuCol && <th className={`px-3 border-r col-sku-lbl ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-700 bg-slate-900/10 text-emerald-250 font-bold'}`}>SKU</th>;
+                                      return showSkuCol && <th className={`px-3 border-r col-sku-lbl ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-200 bg-emerald-500/10 text-emerald-800 font-bold'}`}>SKU</th>;
                                     })()}
                                     {printColumns.sizes && activeColorSizes.map(t => (
-                                      <th key={t} className={`px-2 border-r col-sizes-cells ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-700 bg-slate-900/10 text-white font-bold'}`}>{t}</th>
+                                      <th key={t} className={`px-2 border-r col-sizes-cells ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-200 bg-slate-200/50 text-slate-700 font-bold'}`}>{t}</th>
                                     ))}
-                                    <th className={`px-2 border-r ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>PCS/CTN</th>
-                                    {printColumns.nbctn && <th className={`px-2 border-r col-nbctn-metric ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>NB CTN</th>}
-                                    {printColumns.totalqty && <th className={`px-2 border-r col-totalqty-metric ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>TOTAL QTY</th>}
-                                    {printColumns.net && <th className={`px-2 border-r col-net-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-700 text-teal-200'}`}>N.W (KG)</th>}
-                                    {printColumns.gross && <th className={`px-2 border-r col-gross-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-700 text-red-200'}`}>G.W (KG)</th>}
+                                    <th className={`px-2 border-r ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>PCS/CTN</th>
+                                    {printColumns.nbctn && <th className={`px-2 border-r col-nbctn-metric ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>NB CTN</th>}
+                                    {printColumns.totalqty && <th className={`px-2 border-r col-totalqty-metric ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>TOTAL QTY</th>}
+                                    {printColumns.net && <th className={`px-2 border-r col-net-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-200 text-teal-700 font-bold'}`}>N.W (KG)</th>}
+                                    {printColumns.gross && <th className={`px-2 border-r col-gross-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-200 text-red-700 font-bold'}`}>G.W (KG)</th>}
                                     {printColumns.cbm && <th className="px-2 col-cbm-metric">CBM (m³)</th>}
                                   </tr>
                                 </thead>
@@ -5075,26 +5170,26 @@ export default function App() {
                           <div className={`overflow-x-auto rounded-lg border ${darkMode ? 'border-white/10 bg-[#0F0F12]' : 'border-slate-200 bg-slate-50/50'}`}>
                             <table className="w-full text-xs text-center border-collapse">
                               <thead>
-                                <tr className={`border-b font-mono font-bold text-[10px] ${darkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-800 border-slate-700 text-white'}`}>
+                                <tr className={`border-b font-mono font-bold text-[10px] ${darkMode ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
                                   {printColumns.ctn && (
                                     <>
-                                      <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>N° DÉBUT</th>
-                                      <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>N° FIN</th>
+                                      <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>N° DÉBUT</th>
+                                      <th className={`py-2.5 px-2 uppercase text-center border-r col-ctn-index ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>N° FIN</th>
                                     </>
                                   )}
-                                  {printColumns.color && <th className={`px-2 border-r col-color-lbl ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>COULEUR</th>}
+                                  {printColumns.color && <th className={`px-2 border-r col-color-lbl ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>COULEUR</th>}
                                   {(() => {
                                     const showSkuColCombined = printColumns.sku && colors.some(col => Object.values(col.sizes || {}).some((s: any) => s.sku && String(s.sku).trim() !== ''));
-                                    return showSkuColCombined && <th className={`px-3 border-r col-sku-lbl ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-700 bg-slate-900/10 text-emerald-250 font-bold'}`}>SKU</th>;
+                                    return showSkuColCombined && <th className={`px-3 border-r col-sku-lbl ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-200 bg-emerald-500/10 text-emerald-800 font-bold'}`}>SKU</th>;
                                   })()}
                                   {printColumns.sizes && summaryUniqueSizes.map(t => (
-                                    <th key={t} className={`px-2 border-r col-sizes-cells ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-700 bg-slate-900/10 text-white font-bold'}`}>{t}</th>
+                                    <th key={t} className={`px-2 border-r col-sizes-cells ${darkMode ? 'border-white/10 bg-white/5 text-white font-bold' : 'border-slate-200 bg-slate-200/50 text-slate-700 font-bold'}`}>{t}</th>
                                   ))}
-                                  <th className={`px-2 border-r ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>PCS/CTN</th>
-                                  {printColumns.nbctn && <th className={`px-2 border-r col-nbctn-metric ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>NB CTN</th>}
-                                  {printColumns.totalqty && <th className={`px-2 border-r col-totalqty-metric ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>TOTAL QTY</th>}
-                                  {printColumns.net && <th className={`px-2 border-r col-net-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-700 text-teal-205'}`}>N.W (KG)</th>}
-                                  {printColumns.gross && <th className={`px-2 border-r col-gross-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-700 text-red-205'}`}>G.W (KG)</th>}
+                                  <th className={`px-2 border-r ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>PCS/CTN</th>
+                                  {printColumns.nbctn && <th className={`px-2 border-r col-nbctn-metric ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>NB CTN</th>}
+                                  {printColumns.totalqty && <th className={`px-2 border-r col-totalqty-metric ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>TOTAL QTY</th>}
+                                  {printColumns.net && <th className={`px-2 border-r col-net-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-200 text-teal-700 font-bold'}`}>N.W (KG)</th>}
+                                  {printColumns.gross && <th className={`px-2 border-r col-gross-metric ${darkMode ? 'border-white/10 text-white' : 'border-slate-200 text-red-700 font-bold'}`}>G.W (KG)</th>}
                                   {printColumns.cbm && <th className="px-2 col-cbm-metric">CBM (m³)</th>}
                                 </tr>
                               </thead>
@@ -5214,9 +5309,9 @@ export default function App() {
                         <div className={`overflow-x-auto rounded-lg border ${darkMode ? 'border-white/10' : 'border-slate-200 bg-slate-50/50'}`}>
                           <table className="w-full text-xs text-center border-collapse">
                             <thead>
-                              <tr className={`font-mono font-semibold border-b ${darkMode ? 'bg-white/5 text-slate-300 border-white/10' : 'bg-slate-800 text-white border-slate-700'}`}>
-                                <th className={`py-2.5 px-3 text-left border-r ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>COLOR / COULEUR</th>
-                                {summaryUniqueSizes.map(t => <th key={t} className={`border-r col-sizes-cells ${darkMode ? 'border-white/10' : 'border-slate-700'}`}>{t}</th>)}
+                              <tr className={`font-mono font-semibold border-b ${darkMode ? 'bg-white/5 text-slate-300 border-white/10' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                <th className={`py-2.5 px-3 text-left border-r ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>COLOR / COULEUR</th>
+                                {summaryUniqueSizes.map(t => <th key={t} className={`border-r col-sizes-cells ${darkMode ? 'border-white/10' : 'border-slate-200'}`}>{t}</th>)}
                                 <th>TOTAL PCS</th>
                               </tr>
                             </thead>
@@ -6091,13 +6186,13 @@ export default function App() {
                            <div className={`overflow-x-auto rounded-xl border ${darkMode ? 'border-slate-800 bg-slate-900/10' : 'border-slate-200 bg-slate-50/50'}`}>
                              <table className="w-full text-xs text-center border-collapse">
                                <thead>
-                                 <tr className={`font-mono font-semibold border-b ${darkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-800 text-white border-slate-700'}`}>
+                                 <tr className={`font-mono font-semibold border-b ${darkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                                    <th className="py-2.5 px-3 text-left">Couleur</th>
                                    <th className="py-2.5">Total Cartons</th>
                                    <th className="py-2.5">Style d'emballage</th>
                                    <th className="py-2.5">Total Pièces</th>
-                                   <th className={`py-2.5 font-bold ${darkMode ? 'text-teal-400' : 'text-teal-200'}`}>Poids Net</th>
-                                   <th className={`py-2.5 font-bold ${darkMode ? 'text-red-500' : 'text-red-200'}`}>Poids Brut</th>
+                                   <th className={`py-2.5 font-bold ${darkMode ? 'text-teal-400' : 'text-teal-700 font-bold'}`}>Poids Net</th>
+                                   <th className={`py-2.5 font-bold ${darkMode ? 'text-red-500' : 'text-red-700 font-bold'}`}>Poids Brut</th>
                                  </tr>
                                </thead>
                                <tbody className={`divide-y font-mono ${darkMode ? 'divide-slate-800/65' : 'divide-slate-200'}`}>
@@ -6150,18 +6245,18 @@ export default function App() {
                                     <table className="w-full text-xs text-center border-collapse">
                                       <thead>
                                         <tr className={`border-b font-mono font-bold text-[10px] ${
-                                          darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-800 border-slate-700 text-white'
+                                          darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-250 text-slate-700'
                                         }`}>
-                                          <th className={`py-2 px-1 uppercase text-center border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>Début</th>
-                                          <th className={`py-2 px-1 uppercase text-center border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>Fin</th>
+                                          <th className={`py-2 px-1 uppercase text-center border-r ${darkMode ? 'border-slate-800' : 'border-slate-250'}`}>Début</th>
+                                          <th className={`py-2 px-1 uppercase text-center border-r ${darkMode ? 'border-slate-800' : 'border-slate-250'}`}>Fin</th>
                                           {activeColorSizes.map(t => (
-                                            <th key={t} className={`px-1.5 border-r ${darkMode ? 'border-slate-800 bg-blue-500/5 text-[#4f8ef7]' : 'border-slate-700 bg-slate-900/10 text-white font-bold'}`}>{t}</th>
+                                            <th key={t} className={`px-1.5 border-r ${darkMode ? 'border-slate-800 bg-blue-500/5 text-[#4f8ef7]' : 'border-slate-250 bg-slate-200/50 text-slate-700 font-bold'}`}>{t}</th>
                                           ))}
-                                          <th className={`px-1.5 border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>Pcs/Ctn</th>
-                                          <th className={`px-1.5 border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>Nb Ctn</th>
-                                          <th className={`px-1.5 border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>Total Qty</th>
-                                          <th className={`px-1.5 border-r col-net-metric ${darkMode ? 'border-slate-800 text-teal-400' : 'border-slate-700 text-teal-200'}`}>N.W (KG)</th>
-                                          <th className={`px-1.5 col-gross-metric ${darkMode ? 'text-red-400' : 'text-red-200'}`}>G.W (KG)</th>
+                                          <th className={`px-1.5 border-r ${darkMode ? 'border-slate-800' : 'border-slate-250'}`}>Pcs/Ctn</th>
+                                          <th className={`px-1.5 border-r ${darkMode ? 'border-slate-800' : 'border-slate-250'}`}>Nb Ctn</th>
+                                          <th className={`px-1.5 border-r ${darkMode ? 'border-slate-800' : 'border-slate-250'}`}>Total Qty</th>
+                                          <th className={`px-1.5 border-r col-net-metric ${darkMode ? 'border-slate-800 text-teal-400' : 'border-slate-250 text-teal-700 font-bold'}`}>N.W (KG)</th>
+                                          <th className={`px-1.5 col-gross-metric ${darkMode ? 'text-red-400' : 'text-red-700 font-bold'}`}>G.W (KG)</th>
                                         </tr>
                                       </thead>
                                       <tbody className={`divide-y font-mono ${darkMode ? 'divide-slate-800/40' : 'divide-slate-200'}`}>
@@ -6507,28 +6602,28 @@ export default function App() {
                     <table className="w-full text-xs text-center border-collapse">
                       <thead>
                         <tr className={`border-b font-mono font-bold text-[10px] ${
-                          darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-800 border-slate-700 text-white'
+                          darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-700'
                         }`}>
                           {printColumns.ctn && (
                             <>
-                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>N° DÉBUT</th>
-                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>N° FIN</th>
+                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>N° DÉBUT</th>
+                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>N° FIN</th>
                             </>
                           )}
-                          {printColumns.color && <th className={`px-2 col-color-lbl border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>COULEUR</th>}
+                          {printColumns.color && <th className={`px-2 col-color-lbl border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>COULEUR</th>}
                           {(() => {
                             const origColor = colors.find(c => c.nom === res.nom);
                             const showSkuCol = printColumns.sku && !!(origColor && Object.values(origColor.sizes || {}).some((s: any) => s.sku && String(s.sku).trim() !== ''));
-                            return showSkuCol && <th className={`px-3 col-sku-lbl border-r ${darkMode ? 'border-slate-800 bg-emerald-500/5 text-emerald-400' : 'border-slate-700 bg-slate-900/10 text-emerald-250 font-bold'}`}>SKU</th>;
+                            return showSkuCol && <th className={`px-3 col-sku-lbl border-r ${darkMode ? 'border-slate-800 bg-emerald-500/5 text-emerald-400' : 'border-slate-200 bg-emerald-500/10 text-emerald-800 font-bold'}`}>SKU</th>;
                           })()}
                           {printColumns.sizes && activeColorSizes.map(t => (
-                            <th key={t} className={`px-2 col-sizes-cells border-r ${darkMode ? 'border-slate-800 bg-blue-500/5 text-[#4f8ef7]' : 'border-slate-700 bg-slate-900/10 text-white font-bold'}`}>{t}</th>
+                            <th key={t} className={`px-2 col-sizes-cells border-r ${darkMode ? 'border-slate-800 bg-blue-500/5 text-[#4f8ef7]' : 'border-slate-200 bg-slate-200/50 text-slate-700 font-bold'}`}>{t}</th>
                           ))}
-                          <th className={`px-2 border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>PCS/CTN</th>
-                          {printColumns.nbctn && <th className={`px-2 col-nbctn-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>NB CTN</th>}
-                          {printColumns.totalqty && <th className={`px-2 col-totalqty-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>TOTAL QTY</th>}
-                          {printColumns.net && <th className={`px-2 col-net-metric border-r ${darkMode ? 'border-slate-800 text-teal-400' : 'border-slate-700 text-teal-200'}`}>N.W (KG)</th>}
-                          {printColumns.gross && <th className={`px-2 col-gross-metric border-r ${darkMode ? 'border-slate-800 text-red-400' : 'border-slate-700 text-red-200'}`}>G.W (KG)</th>}
+                          <th className={`px-2 border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>PCS/CTN</th>
+                          {printColumns.nbctn && <th className={`px-2 col-nbctn-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>NB CTN</th>}
+                          {printColumns.totalqty && <th className={`px-2 col-totalqty-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>TOTAL QTY</th>}
+                          {printColumns.net && <th className={`px-2 col-net-metric border-r ${darkMode ? 'border-slate-800 text-teal-400' : 'border-slate-200 text-teal-700 font-bold'}`}>N.W (KG)</th>}
+                          {printColumns.gross && <th className={`px-2 col-gross-metric border-r ${darkMode ? 'border-slate-800 text-red-400' : 'border-slate-200 text-red-700 font-bold'}`}>G.W (KG)</th>}
                           {printColumns.cbm && <th className="px-2 col-cbm-metric">CBM (m³)</th>}
                         </tr>
                       </thead>
@@ -6663,27 +6758,27 @@ export default function App() {
                   <table className="w-full text-xs text-center border-collapse">
                     <thead>
                         <tr className={`border-b font-mono font-bold text-[10px] ${
-                          darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-800 border-slate-700 text-white'
+                          darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-700'
                         }`}>
                           {printColumns.ctn && (
                             <>
-                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>N° DÉBUT</th>
-                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>N° FIN</th>
+                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>N° DÉBUT</th>
+                              <th className={`py-2.5 px-2 uppercase text-center col-ctn-index border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>N° FIN</th>
                             </>
                           )}
-                          {printColumns.color && <th className={`px-2 col-color-lbl border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>COULEUR</th>}
+                          {printColumns.color && <th className={`px-2 col-color-lbl border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>COULEUR</th>}
                           {(() => {
                             const showSkuColCombined = printColumns.sku && colors.some(col => Object.values(col.sizes || {}).some((s: any) => s.sku && String(s.sku).trim() !== ''));
-                            return showSkuColCombined && <th className={`px-3 col-sku-lbl border-r ${darkMode ? 'border-slate-800 bg-emerald-500/5 text-emerald-400' : 'border-slate-700 bg-slate-900/10 text-emerald-250 font-bold'}`}>SKU</th>;
+                            return showSkuColCombined && <th className={`px-3 col-sku-lbl border-r ${darkMode ? 'border-slate-800 bg-emerald-500/5 text-emerald-400' : 'border-slate-200 bg-emerald-500/10 text-emerald-800 font-bold'}`}>SKU</th>;
                           })()}
                           {printColumns.sizes && summaryUniqueSizes.map(t => (
-                            <th key={t} className={`px-2 col-sizes-cells border-r ${darkMode ? 'border-slate-800 bg-blue-500/5 text-[#4f8ef7]' : 'border-slate-700 bg-slate-900/10 text-white font-bold'}`}>{t}</th>
+                            <th key={t} className={`px-2 col-sizes-cells border-r ${darkMode ? 'border-slate-800 bg-blue-500/5 text-[#4f8ef7]' : 'border-slate-200 bg-slate-200/50 text-slate-700 font-bold'}`}>{t}</th>
                           ))}
-                          <th className={`px-2 border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>PCS/CTN</th>
-                          {printColumns.nbctn && <th className={`px-2 col-nbctn-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>NB CTN</th>}
-                          {printColumns.totalqty && <th className={`px-2 col-totalqty-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>TOTAL QTY</th>}
-                          {printColumns.net && <th className={`px-2 col-net-metric border-r ${darkMode ? 'border-slate-800 text-teal-400' : 'border-slate-700 text-teal-200'}`}>N.W (KG)</th>}
-                          {printColumns.gross && <th className={`px-2 col-gross-metric border-r ${darkMode ? 'border-slate-800 text-red-400' : 'border-slate-700 text-red-200'}`}>G.W (KG)</th>}
+                          <th className={`px-2 border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>PCS/CTN</th>
+                          {printColumns.nbctn && <th className={`px-2 col-nbctn-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>NB CTN</th>}
+                          {printColumns.totalqty && <th className={`px-2 col-totalqty-metric border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>TOTAL QTY</th>}
+                          {printColumns.net && <th className={`px-2 col-net-metric border-r ${darkMode ? 'border-slate-800 text-teal-400' : 'border-slate-200 text-teal-700 font-bold'}`}>N.W (KG)</th>}
+                          {printColumns.gross && <th className={`px-2 col-gross-metric border-r ${darkMode ? 'border-slate-800 text-red-400' : 'border-slate-200 text-red-700 font-bold'}`}>G.W (KG)</th>}
                           {printColumns.cbm && <th className="px-2 col-cbm-metric">CBM (m³)</th>}
                         </tr>
                     </thead>
@@ -6764,10 +6859,10 @@ export default function App() {
                       <table className="w-full text-xs text-center border-collapse">
                         <thead>
                           <tr className={`font-mono font-semibold border-b ${
-                            darkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-800 text-white border-slate-700'
+                            darkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-100 text-slate-700 border-slate-200'
                           }`}>
-                            <th className={`py-2 px-3 text-left border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>COLOR / COULEUR</th>
-                            {summaryUniqueSizes.map(t2 => <th key={t2} className={`border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>{t2}</th>)}
+                            <th className={`py-2 px-3 text-left border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>COLOR / COULEUR</th>
+                            {summaryUniqueSizes.map(t2 => <th key={t2} className={`border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>{t2}</th>)}
                             <th>TOTAL PCS</th>
                           </tr>
                         </thead>
@@ -6849,9 +6944,9 @@ export default function App() {
                   <table className="w-full text-xs text-center border-collapse">
                     <thead>
                       <tr className={`font-mono font-semibold border-b ${
-                        darkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-800 text-white border-slate-700'
+                        darkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-100 text-slate-700 border-slate-200'
                       }`}>
-                        <th className={`py-2 px-3 text-left border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>COLORS / COULEURS</th>
+                        <th className={`py-2 px-3 text-left border-r ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>COLORS / COULEURS</th>
                         {activeResults[0].tailles.filter(t => isStandardSizeAlwaysShown(t) || (colors[activeResults[0].colorIndex ?? 0]?.sizes[t]?.qtyTot || 0) > 0).map(t => (
                           <th key={t} className={`border-r ${darkMode ? 'border-slate-800' : 'border-slate-700'}`}>{t}</th>
                         ))}
