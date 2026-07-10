@@ -68,7 +68,9 @@ import {
   BG_COLORS_DARK,
   BG_COLORS_LIGHT,
   getRemainderRowColor,
-  isRemainderRow
+  isRemainderRow,
+  numberToFrenchWords,
+  validateColorCustomRemainders
 } from './utils';
 
 // Default template structures
@@ -209,6 +211,12 @@ export default function App() {
     limit: number;
     currentTotal: number;
     sizesInvolved: string[];
+  } | null>(null);
+
+  const [remainderValidationError, setRemainderValidationError] = useState<{
+    isOpen: boolean;
+    colorName: string;
+    errors: string[];
   } | null>(null);
 
   // Accordion Expansions to collapse sections for clean layout
@@ -1517,6 +1525,20 @@ export default function App() {
 
   // Generate Results Trigger
   const handleGenerateList = () => {
+    // Intervene if any custom remainders are configured incorrectly
+    for (let i = 0; i < colors.length; i++) {
+      const color = colors[i];
+      const validation = validateColorCustomRemainders(color, globalPackingMode);
+      if (!validation.valid) {
+        setRemainderValidationError({
+          isOpen: true,
+          colorName: color.nom,
+          errors: validation.errors
+        });
+        return; // BLOCK generation and show validation warning
+      }
+    }
+
     const outputResults = colors.map((c, idx) => {
       return computeColorResult(c, globalPackingMode, forceSingleCarton, maxSizesPerBox, idx, forceSubCapSolidInMixed);
     });
@@ -2084,6 +2106,54 @@ export default function App() {
                 className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs font-mono transition-all cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99]"
               >
                 Compris, ajuster la quantité
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {remainderValidationError?.isOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9600] backdrop-blur-xs px-4">
+          <div className={`border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 transition-all animate-in fade-in zoom-in-95 duration-150 ${
+            darkMode ? 'bg-[#18161e] border-red-500/40 text-slate-100' : 'bg-white border-red-200 text-slate-900 shadow-xl'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-500/10 rounded-full text-red-500 mt-0.5">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <h3 className="text-sm font-sans font-black uppercase tracking-wider text-red-500 flex items-center gap-1.5">
+                  ⚠️ Validation des Pièces de Reste
+                </h3>
+                <p className={`text-xs leading-relaxed ${darkMode ? 'text-slate-350' : 'text-slate-600'}`}>
+                  La quantité de pièces répartie pour la couleur <b>{remainderValidationError.colorName}</b> est incorrecte. Le total alloué doit correspondre exactement aux pièces restantes de la taille choisie. Les pièces d'un reste ne peuvent pas être divisées autrement.
+                </p>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-xl border text-[11px] font-mono space-y-2 max-h-60 overflow-y-auto ${
+              darkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+            }`}>
+              <div className={`font-bold flex justify-between pb-1.5 border-b ${darkMode ? 'text-slate-350 border-white/10' : 'text-slate-700 border-slate-200'}`}>
+                <span>⚠️ Écarts de répartition constatés :</span>
+              </div>
+              <ul className="space-y-2 text-xs">
+                {remainderValidationError.errors.map((err, i) => (
+                  <li key={i} className="text-red-500 flex items-start gap-1">
+                    <span className="mt-0.5">•</span>
+                    <span>{err}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setRemainderValidationError(null)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs font-mono transition-all cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99]"
+              >
+                Compris, vérifier la quantité
               </button>
             </div>
           </div>
@@ -4373,7 +4443,22 @@ export default function App() {
                           </label>
                         </div>
 
-                        {!activeColorConfig.customRemaindersEnabled ? (
+                        {activeColorResult?.mode !== 'mixte_autorise' ? (
+                          <div className={`p-5 rounded-xl border border-dashed text-center space-y-3 ${
+                            darkMode ? 'border-red-500/30 bg-red-500/5 text-red-400' : 'border-amber-200 bg-amber-50 text-amber-900 shadow-xs'
+                          }`}>
+                            <div className="text-2xl">⚠️</div>
+                            <h5 className="text-xs font-sans font-black uppercase tracking-wider text-red-500">
+                              Mélange non applicable (Stratégie SOLID active)
+                            </h5>
+                            <p className="text-xs max-w-lg mx-auto opacity-80 font-sans leading-relaxed">
+                              La stratégie de colisage résolue pour la couleur <b>{activeColorConfig.nom}</b> est actuellement réglée sur <b>SOLID (Solide)</b>. Le mélange et la personnalisation des restes de pièces ne sont applicables que sous la stratégie <b>MIXED (Mixte)</b>.
+                            </p>
+                            <p className="text-[11px] max-w-lg mx-auto opacity-70 font-mono leading-relaxed">
+                              Pour utiliser cette fonctionnalité, changez le mode de cette couleur en <b>MIXED</b> ou configurez la stratégie <b>Globale</b> en MIXTE dans l'onglet des paramètres.
+                            </p>
+                          </div>
+                        ) : !activeColorConfig.customRemaindersEnabled ? (
                           <div className={`p-4 rounded-lg text-xs flex items-center gap-2 font-mono ${darkMode ? 'bg-white/5 text-slate-400' : 'bg-slate-50 text-slate-600'}`}>
                             <span>ℹ️</span>
                             <span>Le colisage automatique est actif. Les {sumQtyLastPcs} pièces restantes seront réparties selon la méthode classique de la stratégie globale.</span>
@@ -4410,11 +4495,16 @@ export default function App() {
                                     }`}>
                                       <div className="font-bold border-b pb-1 mb-1 flex items-center justify-between" style={{ borderColor: 'currentColor' }}>
                                         <span>Taille {sz}</span>
-                                        <span className="font-mono text-[10px]">Reste: {r}</span>
+                                        <span className="font-mono text-[10px]">Requis: <b>{r} pcs</b></span>
                                       </div>
-                                      <div className="space-y-0.5 text-[10px] opacity-90">
-                                        <div>Alloué : <b>{allocated} pcs</b></div>
-                                        <div>Restant : <b>{unallocated} pcs</b></div>
+                                      <div className="space-y-1 text-[10px] opacity-90 mt-1">
+                                        <div className="text-[9px] uppercase tracking-wider opacity-75">
+                                          ({r > 0 ? numberToFrenchWords(r) : 'zéro'} {r > 1 ? 'pièces' : 'pièce'})
+                                        </div>
+                                        <div className="border-t pt-1 mt-1 border-dotted" style={{ borderColor: 'currentColor' }}>
+                                          <div>Alloué : <b>{allocated} pcs</b> ({numberToFrenchWords(allocated)})</div>
+                                          <div>Restant : <b className={unallocated !== 0 ? "font-black" : ""}>{unallocated} pcs</b></div>
+                                        </div>
                                       </div>
                                     </div>
                                   );
@@ -4556,6 +4646,18 @@ export default function App() {
                                                       // Find sizes with quantity > 0
                                                       const activeSizes = Object.keys(prospectiveSizes).filter(s => (Number(prospectiveSizes[s]) || 0) > 0);
                                                       
+                                                      if (activeSizes.length > maxSizesPerBox) {
+                                                        // Show error dialog and block!
+                                                        setCartonLimitError({
+                                                          isOpen: true,
+                                                          message: `Le nombre de tailles mélangées dans ce carton (${activeSizes.length}) dépasse la limite de tailles différentes autorisées par carton mixte (${maxSizesPerBox} tailles max selon vos paramètres logistiques).`,
+                                                          limit: maxSizesPerBox,
+                                                          currentTotal: activeSizes.length,
+                                                          sizesInvolved: activeSizes
+                                                        });
+                                                        return; // BLOCK state update
+                                                      }
+
                                                       if (activeSizes.length > 0) {
                                                         // Get the capacity limit for each active size in the carton
                                                         const caps = activeSizes.map(s => activeColorConfig.sizes[s]?.cap || 25);

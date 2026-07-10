@@ -157,7 +157,7 @@ export function computeColorResult(
   }
 
   // 1b. Custom Remainder Packing Logic
-  if (colorConfig.customRemaindersEnabled && colorConfig.customRemainders && colorConfig.customRemainders.length > 0) {
+  if (activeMode === 'mixte_autorise' && colorConfig.customRemaindersEnabled && colorConfig.customRemainders && colorConfig.customRemainders.length > 0) {
     // Pack full cartons first
     tailles.forEach(t => {
       const q = sizes[t]?.qtyTot || 0;
@@ -2078,4 +2078,82 @@ export async function exportToExcel(
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   saveAs(blob, userFilename);
+}
+
+/**
+ * Converts a number from 0 to 150 into its exact French words representation.
+ * Supporting numbers nicely for professional logistics and letters printing.
+ */
+export function numberToFrenchWords(n: number): string {
+  if (n === 0) return 'zéro';
+  
+  const ones = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+  const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingts', 'quatre-vingt-dix'];
+  
+  if (n < 20) return ones[n];
+  if (n < 70) {
+    const t = Math.floor(n / 10);
+    const o = n % 10;
+    if (o === 1) return `${tens[t]}-et-un`;
+    return o > 0 ? `${tens[t]}-${ones[o]}` : tens[t];
+  }
+  if (n < 80) {
+    const o = n % 10;
+    if (o === 0) return 'soixante-dix';
+    if (o === 1) return `soixante-et-onze`;
+    return `soixante-${ones[10 + o]}`;
+  }
+  if (n < 90) {
+    const o = n % 10;
+    return o > 0 ? `quatre-vingt-${ones[o]}` : `quatre-vingts`;
+  }
+  if (n < 100) {
+    const o = n % 10;
+    if (o === 0) return 'quatre-vingt-dix';
+    return `quatre-vingt-${ones[10 + o]}`;
+  }
+  if (n === 100) return 'cent';
+  if (n < 200) {
+    return `cent ${numberToFrenchWords(n - 100)}`;
+  }
+  return n.toString();
+}
+
+/**
+ * Checks if custom remainders for a specific color perfectly cover all required leftovers.
+ */
+export function validateColorCustomRemainders(
+  colorConfig: ColorConfig,
+  globalMode: 'strict_solide' | 'mixte_autorise'
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  const activeMode = colorConfig.mode === 'inherit' ? globalMode : colorConfig.mode;
+
+  if (activeMode !== 'mixte_autorise' || !colorConfig.customRemaindersEnabled) {
+    return { valid: true, errors };
+  }
+
+  const { tailles, sizes } = colorConfig;
+  tailles.forEach(sz => {
+    const qTot = sizes[sz]?.qtyTot || 0;
+    const cap = sizes[sz]?.cap || 25;
+    const r = qTot % cap;
+
+    let allocated = 0;
+    colorConfig.customRemainders?.forEach(cc => {
+      allocated += Number(cc.sizes[sz]) || 0;
+    });
+
+    if (allocated !== r) {
+      if (r > 0 || allocated > 0) {
+        const lettersRequired = numberToFrenchWords(r).toUpperCase();
+        const lettersAllocated = numberToFrenchWords(allocated).toUpperCase();
+        errors.push(
+          `Taille ${sz} : Vous avez alloué ${allocated} (${lettersAllocated}) pièces, mais le reste exact requis est de ${r} (${lettersRequired}) pièces.`
+        );
+      }
+    }
+  });
+
+  return { valid: errors.length === 0, errors };
 }
