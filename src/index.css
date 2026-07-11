@@ -3,11 +3,11 @@
 
 :root {
   /* High contrast font colors for light theme: dark slate & black */
-  --slate-100: #1e293b;
-  --slate-200: #0f172a;
-  --slate-300: #1e293b;
-  --slate-450: #0f172a;
-  --slate-400: #0f172a;
+  --slate-100: #8CBBFF;
+  --slate-200: #D99CFF;
+  --slate-300: #FFABD9;
+  --slate-450: #DE99FF;
+  --slate-400: #DE99FF;
   --slate-500: #020617; /* Very near black */
   --slate-600: #000000; /* Pure black */
   --slate-700: #000000; /* Pure black */
